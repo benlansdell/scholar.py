@@ -300,6 +300,11 @@ class ScholarArticleParser(object):
         resulting instances via the handle_article callback.
         """
         self.soup = BeautifulSoup(html)
+        for div in self.soup.findAll(ScholarArticleParser._tag_cites):
+            for idx,tag in enumerate(div):
+                if idx == 0:
+                    self.total = int(tag.split()[1])
+                    #print cites
         for div in self.soup.findAll(ScholarArticleParser._tag_checker):
             self._parse_article(div)
             self._clean_article()
@@ -389,6 +394,24 @@ class ScholarArticleParser(object):
             # so split -- conveniently produces a list in any case
             res = res.split()
         return klass in res
+
+    @staticmethod
+    def _tag_has_id(tag, id):
+        """
+        This predicate function checks whether a BeatifulSoup Tag instance
+        has an ID attribute.
+        """
+        res = tag.get('id') or []
+        if type(res) != list:
+            # BeautifulSoup 3 can return e.g. 'gs_md_wp gs_ttss',
+            # so split -- conveniently produces a list in any case
+            res = res.split()
+        return id in res
+
+    @staticmethod
+    def _tag_cites(tag):
+        return tag.name == 'div' \
+            and ScholarArticleParser._tag_has_id(tag, 'gs_ab_md')        
 
     @staticmethod
     def _tag_checker(tag):
@@ -841,6 +864,7 @@ class ScholarQuerier(object):
         """
         parser = self.Parser(self)
         parser.parse(html)
+        self.total = parser.total
 
     def add_article(self, art):
         self.get_citation_data(art)
@@ -894,6 +918,8 @@ class ScholarQuerier(object):
             ScholarUtils.log('info', err_msg + ': %s' % err)
             return None
 
+def total(querier):
+    print querier.total
 
 def txt(querier):
     articles = querier.articles
@@ -967,6 +993,8 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
                      help='Like --csv, but print header with column names')
     group.add_option('--citation', metavar='FORMAT', default=None,
                      help='Print article details in standard citation format. Argument Must be one of "bt" (BibTeX), "en" (EndNote), "rm" (RefMan), or "rw" (RefWorks).')
+    group.add_option('--totalcites', action='store_true',
+                     help='Only output the (approximate) number of results')
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, 'Miscellaneous')
@@ -1050,7 +1078,9 @@ scholar.py -c 5 -a "albert einstein" -t --none "quantum theory" --after 1970"""
 
     querier.send_query(query)
 
-    if options.csv:
+    if options.totalcites:
+        total(querier)
+    elif options.csv:
         csv(querier)
     elif options.csv_header:
         csv(querier, header=True)
